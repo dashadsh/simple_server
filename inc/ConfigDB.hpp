@@ -1,14 +1,3 @@
-/* ************************************************************************** */
-/*                                                                            */
-/*                                                        :::      ::::::::   */
-/*   ConfigDB.hpp                                       :+:      :+:    :+:   */
-/*                                                    +:+ +:+         +:+     */
-/*   By: drey <drey@student.42.fr>                  +#+  +:+       +#+        */
-/*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2024/03/09 11:16:08 by nikitos           #+#    #+#             */
-/*   Updated: 2024/03/31 18:12:55 by drey             ###   ########.fr       */
-/*                                                                            */
-/* ************************************************************************** */
 
 #ifndef ConfigDB_H
 # define ConfigDB_H
@@ -25,6 +14,9 @@ class ConfigDB{
 
 		ConfigDB();
 		~ConfigDB();
+		ConfigDB(const ConfigDB &rhs);
+		ConfigDB &operator=(const ConfigDB &rhs);
+		
 		void		pushInBase(std::string env_name);
 		void		eraseLastSection();
 		void		fillMap(std::string value, std::string key, std::string currentSection ,std::string KeyWithoutLastSection);
@@ -37,9 +29,6 @@ class ConfigDB{
 		KeyValues getKeyValue();
 		void splitDB(const KeyValues& keyValues);
 		void splitDirectiveAndValue(std::string currentSection, VecStr::const_iterator it, std::string trimmedLine);
-		// std::vector<KeyMapValue> getServerDataByIdx(GroupedDBMap db, int index);
-		// void printAllDBData(GroupedDBMap db);
-		// void printServerData(const std::vector<ConfigDB::KeyMapValue>& values);
 		void printChoice(bool allRootData, int rootDataIdx, bool allServersData, int serverDataIdx, bool allConfig);
 		void handleRootDB(MapStr keyMap, const std::string& key,const VecStr& values, size_t lhs, size_t rhs);
 		void handleServerDB(MapStr keyMap, const std::string& key,const VecStr& values, size_t lhs, size_t rhs);

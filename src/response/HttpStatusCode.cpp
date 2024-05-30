@@ -1,3 +1,4 @@
+
 #include "../../inc/AllHeaders.hpp"
 
 HttpStatusCodes::HttpStatusCodes() {
@@ -70,6 +71,17 @@ HttpStatusCodes::HttpStatusCodes() {
     codeMap[508] = "Loop Detected";
     codeMap[510] = "Not Extended";
     codeMap[511] = "Network Authentication Required";
+}
+
+HttpStatusCodes::HttpStatusCodes(const HttpStatusCodes &rhs)
+    : codeMap(rhs.codeMap) {
+}
+
+HttpStatusCodes &HttpStatusCodes::operator=(const HttpStatusCodes &rhs) {
+    if (this != &rhs) {
+        codeMap = rhs.codeMap;
+    }
+    return *this;
 }
 
 std::string HttpStatusCodes::getStatusCode(int code) {

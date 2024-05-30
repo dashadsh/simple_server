@@ -1,3 +1,4 @@
+
 #ifndef FILE_HPP
 #  define FILE_HPP
 
@@ -25,6 +26,8 @@ public:
     File();
     File(std::string path);
     ~File();
+    File(const File &rhs);
+    File &operator=(const File &rhs);
 
     bool is_directory();
     bool is_file();
@@ -37,18 +40,19 @@ public:
     void parseExt();
     void parseExtNegotiation();
     void closeFile();
-    void createFile(std::string &body);
+    void createFile(const std::string &body);
     void appendFile(const std::string &body);
+    void appendFile(const std::string &body, std::string MimeTypes);
     bool deleteFile();
     void set_path(std::string path, bool negotiation = false);
-    void findMatchingFiles(); // parse_match
+    void findMatchingFiles();
     void print_file_info(const std::string& filename) const;
     void print_dir_entry(struct dirent* ent) const;
     
 
     std::string last_modified();
     std::string find_index(std::vector<std::string> &indexes);
-    std::string listDir(std::string &target); // autoindex
+    std::string listDir(std::string &target);
     std::string &getMimeExt();
     std::string getContent();
     std::string &getFilePath();
@@ -71,8 +75,6 @@ private:
     std::string file_name_full_;
     std::vector<std::string> matches_;
     std::string path_;
-    // MimeTypes *mimes_;
-    // HttpStatusCodes *status_codes_;
 };
 
 #endif

@@ -1,7 +1,10 @@
+
 #ifndef CLIENT_HPP
 #define CLIENT_HPP
 
 #include "AllHeaders.hpp"
+#include "Listen.hpp"
+#include "DB.hpp"
 
 #define START_TIMEOUT 300
 #define LAST_TIMEOUT 150
@@ -22,21 +25,35 @@ class Client
 public:
     Client(DB &db, Listen &host_port, HttpRequest &req_, size_t targetServerIdx, int status);
     ~Client();
-
+    Client &operator=(const Client &rhs);
+    Client(const Client &rhs);
+    
     void setupConfig();
     void setupResponse();
     HttpRequest *getRequest(bool val = false);
     HttpResponse *getResponse();
+    RequestConfig *getConfig();
     std::string getResponseString();
+    void setCgi(bool &val);
+    bool getCgi();
+    RequestConfig &getConfigRef();
+    HttpResponse &getResponseRef();
+    HttpRequest &getRequestRef();
+    Client* clone() const;
+    void setConfig(RequestConfig &config);
+    void setResponse(HttpResponse &response);
+    bool getCgiResponse();
+    void printRouting();
 
 private:
     HttpRequest *request_;
-    Listen &host_port_;
+    Listen host_port_;
     RequestConfig *config_;
     HttpResponse *response_;
-    DB &db_;
+    DB db_;
     size_t serverId_;
     int statusCode_;
+    bool is_cgi_;
 };
 
 #endif

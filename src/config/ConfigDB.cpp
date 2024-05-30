@@ -1,14 +1,3 @@
-/* ************************************************************************** */
-/*                                                                            */
-/*                                                        :::      ::::::::   */
-/*   ConfigFileDB.cpp                                   :+:      :+:    :+:   */
-/*                                                    +:+ +:+         +:+     */
-/*   By: drey <drey@student.42.fr>                  +#+  +:+       +#+        */
-/*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2024/03/09 11:19:53 by nikitos           #+#    #+#             */
-/*   Updated: 2024/03/31 18:37:48 by drey             ###   ########.fr       */
-/*                                                                            */
-/* ************************************************************************** */
 
 #include "../../inc/ConfigDB.hpp"
 
@@ -19,6 +8,28 @@ ConfigDB::ConfigDB()
 
 ConfigDB::~ConfigDB() {}
 
+ConfigDB::ConfigDB(const ConfigDB &rhs)
+    : _variablePath(rhs._variablePath),
+      sectionCounts(rhs.sectionCounts),
+      _keyValues(rhs._keyValues),
+      groupedServers(rhs.groupedServers),
+      groupedRootData(rhs.groupedRootData),
+      counter(rhs.counter) {
+}
+
+ConfigDB &ConfigDB::operator=(const ConfigDB &rhs) {
+    if (this != &rhs) {
+        _variablePath = rhs._variablePath;
+        sectionCounts = rhs.sectionCounts;
+        _keyValues = rhs._keyValues;
+        groupedServers = rhs.groupedServers;
+        groupedRootData = rhs.groupedRootData;
+        counter = rhs.counter;
+    }
+    return *this;
+}
+
+
 void ConfigDB::pushInBase(std::string env_name)
 {
     this->_variablePath.push_back(env_name);
@@ -26,7 +37,7 @@ void ConfigDB::pushInBase(std::string env_name)
 
 void ConfigDB::eraseLastSection()
 {
-    if (!this->_variablePath.empty()) // Probably we don't need that condition
+    if (!this->_variablePath.empty())
         this->_variablePath.pop_back();
 }
 
@@ -73,14 +84,11 @@ std::string ConfigDB::readFile(char **argv)
         {
             line = line.substr(0, commentPos);
         }
-        line.erase(0, line.find_first_not_of(" \t\n\r\f\v")); // Trim leading whitespace
-        line.erase(line.find_last_not_of(" \t\n\r\f\v") + 1); // Trim trailing whitespace
+        line.erase(0, line.find_first_not_of(" \t\n\r\f\v"));
+        line.erase(line.find_last_not_of(" \t\n\r\f\v") + 1);
 
-        // If the line ends with a space, concatenate with the next line
         if (!line.empty() && line[line.size() - 1] == ' ')
-        {
             lastLine += line.substr(0, line.size() - 1) + " ";
-        }
         else
         {
             if (!lastLine.empty())
@@ -90,17 +98,14 @@ std::string ConfigDB::readFile(char **argv)
                 lastLine.clear();
             }
             else
-            {
                 configData += line + "\n";
-            }
         }
     }
     if (!lastLine.empty())
-    {
         configData += lastLine;
-    }
     if (checkCurly(configData))
         ft_errors("curly ", 3);
+    file.close();
     return configData;
 }
 
@@ -113,13 +118,10 @@ std::string ConfigDB::handleKeySection(int &start, int &end, std::string &line)
     std::replace(currentSection.begin(), currentSection.end(), ' ', '_');
     this->pushInBase(currentSection);
     if (sectionCounts.find(currentSection) == sectionCounts.end())
-    {
         sectionCounts[currentSection] = 0;
-    }
     else
-    {
         sectionCounts[currentSection]++;
-    }
+    
     std::vector<std::string>::iterator it = this->_variablePath.begin();
     bool server = false;
     while (it != this->_variablePath.end())
@@ -147,9 +149,7 @@ void ConfigDB::printKeyValue()
                   << "\nValue(s): " << std::endl;
         const VecStr &values = it1->second;
         for (VecStr::const_iterator it2 = values.begin(); it2 != values.end(); ++it2)
-        {
             std::cout << "  " << *it2 << std::endl;
-        }
         std::cout << "\n";
     }
 }
@@ -302,7 +302,7 @@ void ConfigDB::splitDB(const KeyValues &keyValues)
             }
             else
             {
-                std::cout << "UNEXPECTED KEY: " << key << "\n";
+                std::cout << CURSIVE_GRAY << "UNEXPECTED KEY: " << key << RESET << "\n";
             }
         }
     }

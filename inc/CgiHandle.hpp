@@ -1,14 +1,3 @@
-/* ************************************************************************** */
-/*                                                                            */
-/*                                                        :::      ::::::::   */
-/*   CgiHandle.hpp                                      :+:      :+:    :+:   */
-/*                                                    +:+ +:+         +:+     */
-/*   By: alappas <alappas@student.42wolfsburg.de    +#+  +:+       +#+        */
-/*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2024/02/29 01:28:32 by alappas           #+#    #+#             */
-/*   Updated: 2024/05/09 01:33:49 by alappas          ###   ########.fr       */
-/*                                                                            */
-/* ************************************************************************** */
 
 #ifndef CGIHANDLE_HPP
 # define CGIHANDLE_HPP
@@ -31,10 +20,11 @@ class CgiHandle{
 		int			pipe_in[2];
 		int			pipe_out[2];
 		int			content_length;
+		int			epoll_fd_;
 		
 	public:
 		CgiHandle();
-		CgiHandle(RequestConfig *config, std::string cgi_ext);
+		CgiHandle(RequestConfig *config, std::string cgi_ext, int epoll_fd);
 		~CgiHandle();
 		CgiHandle(const CgiHandle &other);
 		CgiHandle &operator=(const CgiHandle &other);
@@ -54,6 +44,7 @@ class CgiHandle{
 		void setArgv();
 		void deductContentLength(int length);
 		std::string	checkShebang();
+		int combineFds(int pipe_out);
 };
 
 #endif

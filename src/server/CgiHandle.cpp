@@ -1,25 +1,16 @@
-/* ************************************************************************** */
-/*                                                                            */
-/*                                                        :::      ::::::::   */
-/*   CgiHandle.cpp                                      :+:      :+:    :+:   */
-/*                                                    +:+ +:+         +:+     */
-/*   By: alappas <alappas@student.42wolfsburg.de    +#+  +:+       +#+        */
-/*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2024/02/29 01:28:35 by alappas           #+#    #+#             */
-/*   Updated: 2024/05/09 01:34:11 by alappas          ###   ########.fr       */
-/*                                                                            */
-/* ************************************************************************** */
 
-#include "../../inc/Test.hpp"
+#include  "../../inc/AllHeaders.hpp"
 
-// CgiHandle::CgiHandle()
-// : _cgi_path(NULL), _cgi_pid(-1), _exit_status(0){}
-
-CgiHandle::CgiHandle(RequestConfig *config, std::string cgi_ext)
+// CONSTRUCTOR
+CgiHandle::CgiHandle(RequestConfig *config, std::string cgi_ext, int epoll_fd)
 : _config(config), _cgi_path(""), _cgi_pid(-1), _cgi_ext(cgi_ext), _exit_status(0),
-	_argv(NULL), _envp(NULL), _path(NULL), pipe_in(), pipe_out(), content_length(0){
-	this->initEnv();
+	_argv(NULL), _envp(NULL), _path(NULL), pipe_in(), pipe_out(), content_length(0), epoll_fd_(epoll_fd)
+{
+	this->initEnv(); // init env, no matter POST/GET - just get smth
+	this->execCgi(); // !!!
 }
+// SIC! epoll_fd as argument - reacts if FD are changed
+// FD of child process is added to epoll -> so we can monitor changes of child process
 
 CgiHandle::~CgiHandle(){
 	if (this->_argv)
@@ -51,39 +42,50 @@ CgiHandle& CgiHandle::operator=(const CgiHandle &other){
 	return *this;
 }
 
-void CgiHandle::initEnv(){
+// no matter POST/GET - just get smth
+void CgiHandle::initEnv() {
 
 	std::stringstream ss;
-	
-	if (this->_config->getMethod() == "POST")
-	{
-		this->_env["CONTENT_TYPE"] = this->_config->getHeader("content-type");
-		ss << this->_config->getHeader("content-length");
-		std::string content_length = ss.str();
+	ss << this->_config->getHeader("content-length");
+	std::string content_length = ss.str();
+	this->content_length = atoi(content_length.c_str());
+	if (this->content_length != 0)
 		this->_env["CONTENT_LENGTH"] = content_length;
-		this->content_length = atoi(content_length.c_str());
-		ss.clear();
-	}
-	this->_env["GATEWAY_INTERFACE"] = "CGI/1.1";
-	// this->_env["REMOTE_ADDR"] = getIp();
+	else
+		this->_env["CONTENT_LENGTH"] = "0";
+	ss.clear();
+	if (this->_config->getHeader("content-type").size() > 0)
+		this->_env["CONTENT_TYPE"] = this->_config->getHeader("content-type");
 	this->_env["QUERY_STRING"] = this->_config->getQuery();
+	this->_env["REQUEST_URI"] = this->_config->getUri() + this->_config->getUriSuffix();
+	this->_env["REDIRECT_STATUS"] = "200";
+	this->_env["SCRIPT_NAME"] = this->_config->getUri();
+	this->_env["PATH_INFO"] = "/" + this->_config->getUriSuffix();
+	this->_env["PATH_TRANSLATED"] = this->_config->getRoot() + this->_env["PATH_INFO"];
+	this->_env["SCRIPT_FILENAME"] = this->_config->getRoot() + this->_config->getUri();
+	this->_env["DOCUMENT_ROOT"] = this->_config->getRoot();
+	this->_env["REQUEST_METHOD"] = this->_config->getMethod();
+	this->_env["SERVER_PROTOCOL"] = this->_config->getProtocol();
+	this->_env["SERVER_SOFTWARE"] = "AMANIX";
+	this->_env["GATEWAY_INTERFACE"] = "CGI/1.1";
+	this->_env["REQUEST_SCHEME"] = "http";
 	ss << this->_config->getPort();
 	std::string port = ss.str();
-	this->_env["REMOTE_PORT"] = port;
-	this->_env["HTTP_REFERER"] = "http://" + this->_config->getHost() + ":" + port + "/cgi-bin" + this->_config->getUri();
+	this->_env["SERVER_ADDR"] = this->_config->getHost();
 	this->_env["SERVER_PORT"] = port;
+	this->_env["SERVER_NAME"] = "localhost";
+	this->_env["REMOTE_ADDR"] = this->_config->getHost();
+	this->_env["REMOTE_PORT"] = port;
+	this->_env["HTTP_HOST"] = this->_config->getHost() + ":" + port;
+	this->_env["HTTP_CONNECTION"] = this->_config->getHeader("connection");
+	this->_env["HTTP_UPGRADE_INSECURE_REQUESTS"] = this->_config->getHeader("upgrade-insecure-requests");
+	this->_env["HTTP_USER_AGENT"] = this->_config->getHeader("user-agent");
+	this->_env["HTTP_ACCEPT"] = this->_config->getHeader("accept");
+	this->_env["HTTP_ACCEPT_ENCODING"] = this->_config->getHeader("accept-encoding");
+	this->_env["HTTP_ACCEPT_LANGUAGE"] = this->_config->getHeader("accept-language");
+	this->_env["HTTP_REFERER"] = "http://" + this->_config->getHost() + ":" + port + "/cgi-bin" + this->_config->getUri();
+	this->_env["HTTP_COOKIE"] = this->_config->getHeader("cookie");
 	ss.clear();
-	this->_env["REQUEST_URI"] = this->_config->getUri();
-	this->_env["SERVER_SOFTWARE"] = "AMANIX";
-	this->_env["PATH"] = std::string (getenv("PATH"));
-	this->_env["SERVER_PROTOCOL"] = this->_config->getProtocol();
-	this->_env["REQUEST_METHOD"] = this->_config->getMethod();
-	this->_env["PWD"] = std::string (getenv("PWD"));
-	this->_env["SCRIPT_NAME"] = this->_config->getUri();
-	this->_env["REDIRECT_STATUS"] = "200";
-	this->_env["SERVER_NAME"] = "localhost";//getHeader?
-	// this->_env["REMOTE_USER"] = "";
-	// this->_env["PATH_INFO"] = "";
 }
 
 void CgiHandle::createEnvArray(){
@@ -98,19 +100,15 @@ void CgiHandle::createEnvArray(){
 	this->_envp[i] = NULL;
 }
 
-void CgiHandle::execCgi(){
+void CgiHandle::execCgi() {
 	this->setPath();
-	this->setArgv();
+	this->setArgv(); // checking extention here
 	this->createEnvArray();
-	this->setPipe();
-	if (!this->_path || !this->_argv)// || !this->_envp)
+	// COMBINE FDS -> epoll_wait can monitor changes of child process!
+	if (!this->_path || !this->_argv || !this->_envp || this->setPipe() == -1 || combineFds(getPipeOut()) == 0)
 	{
-		std::cerr << "Error: execve argument creation failed" << std::endl;
 		this->_exit_status = 500;
-		return ;
-	}
-	if (this->setPipe() == -1){
-		this->_exit_status = 500;
+		closePipe();
 		return ;
 	}
 	this->_cgi_pid = fork();
@@ -118,6 +116,7 @@ void CgiHandle::execCgi(){
 	{
 		std::cerr << "Error: fork failed" << std::endl;
 		this->_exit_status = 500;
+		closePipe();
 		return ;
 	}
 	else if (_cgi_pid == 0)
@@ -127,17 +126,16 @@ void CgiHandle::execCgi(){
 		{
 			std::cerr << "Error: execve failed" << std::endl;
 			closePipe();
-			exit(500);
+			this->_exit_status = 500;
+			exit(1);
 		}
 		closePipe();
 	}
-	// waitpid(this->_cgi_pid, &this->_exit_status, 0);
 }
 
-int CgiHandle::setPipe(){
+int CgiHandle::setPipe() {
 	if (pipe(this->pipe_in) == -1 || pipe(this->pipe_out) == -1)
 	{
-		closePipe();
 		std::cerr << "Error: pipe failed" << std::endl;
 		return (-1);
 	}
@@ -179,9 +177,10 @@ std::string CgiHandle::getExecPath(){
 		return "";
 }
 
+// EXTENTION CHECKING HERE!
 void CgiHandle::setArgv(){
 	this->_argv = new char*[3];
-	this->_argv[0] = strdup(this->getExecPath().c_str());
+	this->_argv[0] = strdup(this->getExecPath().c_str()); // checking extention here
 	this->_argv[1] = strdup(this->_path);
 	this->_argv[2] = NULL;
 }
@@ -223,4 +222,17 @@ std::string CgiHandle::checkShebang(){
 		std::stringstream ss(line);
 		return(line.substr(line.find("#!") + 2));
 	}
+}
+
+
+int CgiHandle::combineFds(int pipe_out){
+	struct epoll_event event;
+	std::memset(&event, 0, sizeof(event));
+	event.events = EPOLLIN;
+	event.data.fd = pipe_out;
+	if (epoll_ctl(this->epoll_fd_, EPOLL_CTL_ADD, pipe_out, &event) == -1) {
+		std::cerr << "Epoll_ctl failed: " << strerror(errno) << std::endl;
+		return (0);
+	}
+	return (1);
 }

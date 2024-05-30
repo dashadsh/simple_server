@@ -1,15 +1,3 @@
-/* ************************************************************************** */
-/*                                                                            */
-/*                                                        :::      ::::::::   */
-/*   AllHeaders.hpp                                     :+:      :+:    :+:   */
-/*                                                    +:+ +:+         +:+     */
-/*   By: alappas <alappas@student.42wolfsburg.de    +#+  +:+       +#+        */
-/*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2024/03/12 14:47:30 by nikitos           #+#    #+#             */
-/*   Updated: 2024/04/29 01:39:17 by alappas          ###   ########.fr       */
-/*                                                                            */
-/* ************************************************************************** */
-
 #ifndef ALLHEADERS_HPP
 #define ALLHEADERS_HPP
 
@@ -45,12 +33,11 @@
 #include <dirent.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
-
+#include <signal.h>
 
 #include "ConfigDB.hpp"
 #include "Servers.hpp"
 #include "CgiHandle.hpp"
-#include "DomainResolve.hpp"
 #include "HttpRequest.hpp"
 #include "HttpResponse.hpp"
 #include "File.hpp"
@@ -58,32 +45,11 @@
 #include "HttpStatusCode.hpp"
 #include "RequestConfig.hpp"
 #include "utils.hpp"
-#include "ServerConfig.hpp"
 #include "Client.hpp"
-#include "InputArgs.hpp"
-#include "ErrorCodes.hpp"
-
-
-typedef std::map<std::string, std::string> MapStr;
-typedef std::vector<std::string> VecStr;
-typedef std::map<std::string, VecStr> KeyValues;
-typedef std::pair<MapStr, VecStr> KeyMapValue;
-typedef std::map<int, std::vector<KeyMapValue> > GroupedDBMap;
-
-struct DB
-{
-  const GroupedDBMap serversDB;
-  const GroupedDBMap rootDB;
-};
-
-struct Listen
-{
-  std::string ip_;
-  uint32_t port_;
-
-  Listen() : ip_("127.0.0.1"), port_(80){};
-  Listen(std::string ip, uint32_t port) : ip_(ip), port_(port){};
-};
+#include "CgiClient.hpp"
+#include "Listen.hpp"
+#include "DB.hpp"
+#include "Colors.hpp"
 
 // void
 void trimWordFromEnd(int &start, int &end, std::string line);
@@ -105,7 +71,7 @@ std::string getValue(const std::map<std::string, std::vector<std::string> > &key
 void printAllDBData(GroupedDBMap db);
 void printData(const std::vector<KeyMapValue> &values);
 std::vector<KeyMapValue> getDataByIdx(GroupedDBMap db, int index);
-bool checkModifier(std::string &str);
+bool setModifier(std::string &str);
 const std::string b64decode(const void *data, const size_t &len);
 std::string b64decode(const std::string &str64);
 std::string ftos(size_t num);
@@ -129,5 +95,7 @@ void printMap(const std::map<KeyType, ValueType> &m);
 
 template<typename T>
 void printVec(const std::vector<T> &value, const std::string &callingFunction);
+
+extern Servers* servers;
 
 #endif

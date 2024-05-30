@@ -1,3 +1,4 @@
+
 #ifndef MIMETYPES_HPP
 #define MIMETYPES_HPP
 
@@ -11,7 +12,12 @@ public:
     MimeTypes();
     ~MimeTypes();
 
+    MimeTypes(const MimeTypes &rhs);
+    MimeTypes &operator=(const MimeTypes &rhs);
+    std::string getExt(const std::string& type);
+
     std::string getType(const std::string& extension);
+    std::map<std::string, std::string> getMap();
 };
 
 #endif

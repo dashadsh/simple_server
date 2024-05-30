@@ -1,33 +1,61 @@
-/* ************************************************************************** */
-/*                                                                            */
-/*                                                        :::      ::::::::   */
-/*   Servers.cpp                                        :+:      :+:    :+:   */
-/*                                                    +:+ +:+         +:+     */
-/*   By: alappas <alappas@student.42wolfsburg.de    +#+  +:+       +#+        */
-/*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2024/03/11 16:28:07 by alappas           #+#    #+#             */
-/*   Updated: 2024/05/05 21:48:18 by alappas          ###   ########.fr       */
-/*                                                                            */
-/* ************************************************************************** */
 
-#include "../../inc/Servers.hpp"
-#include "../../inc/HttpRequest.hpp"
+#include "../../inc/AllHeaders.hpp"
 
-//Servers constuctor
-Servers::Servers(ConfigDB &configDB) : _server_fds(), configDB_(configDB){
+Servers::Servers(ConfigDB &configDB) : _epoll_fds(-1), _server_fds(), _domain_to_server(), _ip_to_server(), 
+	_keyValues(), server_index(), server_fd_to_index(), client_to_server(), _client_amount(0),
+	_client_data(), _cgi_clients_childfd(), _client_time(), configDB_(configDB)
+{
+	servers = this;
+	stop_fd = -1;
+	_cgi_clients = std::map<int, CgiClient*>();
 	_keyValues = configDB_.getKeyValue();
 	createServers();
 	initEvents();
 }
 
-//Servers destructor
 Servers::~Servers() {
+	for (std::map<int, CgiClient*>::iterator it = _cgi_clients.begin(); it != _cgi_clients.end(); it++)
+	{
+		if (it->second != NULL)
+			delete it->second;
+	}
+	for (std::map<int, int>::iterator it = client_to_server.begin(); it != client_to_server.end(); it++)
+	{
+		if (close(it->first) == -1)
+			std::cerr << "Close failed with error: " << strerror(errno) << std::endl;
+	}
 	for (std::vector<int>::iterator it = _server_fds.begin(); it != _server_fds.end(); ++it)
-		close(*it);
-	close(_epoll_fds);
+	{
+		if (*it != -1)
+			close(*it);
+	}
+    _server_fds.clear();
+    if (_epoll_fds != -1)
+        close(_epoll_fds);
 }
 
-// Create socket
+Servers::Servers(const Servers &rhs)
+    : _epoll_fds(rhs._epoll_fds),_server_fds(rhs._server_fds), 
+      _domain_to_server(rhs._domain_to_server), _ip_to_server(rhs._ip_to_server),
+      _keyValues(rhs._keyValues), server_index(rhs.server_index),
+      server_fd_to_index(rhs.server_fd_to_index), _client_amount(rhs._client_amount),
+	  configDB_(rhs.configDB_){}
+
+Servers &Servers::operator=(const Servers &rhs) {
+    if (this != &rhs) {
+        _server_fds = rhs._server_fds;
+        _epoll_fds = rhs._epoll_fds;
+        _domain_to_server = rhs._domain_to_server;
+        _ip_to_server = rhs._ip_to_server;
+        _keyValues = rhs._keyValues;
+        server_index = rhs.server_index;
+        server_fd_to_index = rhs.server_fd_to_index;
+		_client_amount = rhs._client_amount;
+        configDB_ = rhs.configDB_;
+    }
+    return *this;
+}
+
 int Servers::createSocket(){
 	int server_fd = socket(AF_INET, SOCK_STREAM, 0);
 	if (server_fd == -1) {
@@ -38,7 +66,6 @@ int Servers::createSocket(){
 	return (1);
 }
 
-// Bind socket
 int Servers::bindSocket(std::string s_port){
 	if (_server_fds.back() == -1)
 	{
@@ -85,8 +112,6 @@ int Servers::bindSocket(std::string s_port){
 	return (1);
 }
 
-
-// Create epoll instance
 void	Servers::createEpoll(){
 	int epoll_fd = epoll_create1(0);
 	this->_epoll_fds = epoll_fd;
@@ -96,7 +121,6 @@ void	Servers::createEpoll(){
 	}
 }
 
-// Listen on socket
 int Servers::listenSocket(){
 	if (listen(_server_fds.back(), SOMAXCONN) == -1) {
 		std::cerr << "Listen failed" << std::endl;
@@ -105,46 +129,53 @@ int Servers::listenSocket(){
 	return (1);
 }
 
-// Combine file descriptors into epoll instance
-int Servers::combineFds(){
-	int flags = fcntl(_server_fds.back(), F_SETFL, O_NONBLOCK, FD_CLOEXEC);
-	if (flags == -1)
-	{
-		std::cerr << "Fcntl failed" << std::endl;
-		return (0);
-	}
+int Servers::combineFds(int socket_fd){
 	struct epoll_event event;
 	std::memset(&event, 0, sizeof(event));
 	event.events = EPOLLIN;
-	event.data.fd = _server_fds.back();
-	if (epoll_ctl(this->_epoll_fds, EPOLL_CTL_ADD, _server_fds.back(), &event) == -1) {
+	event.data.fd = socket_fd;
+	if (epoll_ctl(this->_epoll_fds, EPOLL_CTL_ADD, socket_fd, &event) == -1) {
 		std::cerr << "Epoll_ctl failed" << std::endl;
 		return (0);
 	}
 	return (1);
 }
 
-// Get file descriptors for servers
-void Servers::createServers(){
-	
-	std::cout << "Creating servers" << std::endl;
-	std::vector<std::string> ports;
-	createEpoll();
-	ports = getPorts();
-	for (std::vector<std::string>::iterator it2 = ports.begin(); it2 != ports.end(); it2++) {
-		if (!checkSocket(*it2)){
-			if (createSocket()){
-				if (!bindSocket(*it2) || !listenSocket() || !combineFds())
-					_server_fds.pop_back();
-				else
-				{
-					assignDomain(*it2, _server_fds.back());
-					std::cout << "Server created on port " << _ip_to_server[_server_fds.back()] << ", server:" << _server_fds.back() << std::endl;
-				}
-			}
-		}
-	}
+
+void printRow(int width, int serverNum, int ipWidth, std::string ip) {
+	std::cout << "| " << std::left << std::setw(width) << serverNum << " | " << std::setw(ipWidth) << ip << " |" << std::endl;	
 }
+
+
+void Servers::createServers() {
+    std::cout << "|" << std::string(7, ' ') << CURSIVE_GRAY << " Creating servers..." << RESET << std::string(9, ' ') << "|" << std::endl;
+    std::vector<std::string> ports;
+    createEpoll();
+    ports = getPorts();
+
+    const int serverNumberWidth = 15;
+    const int portWidth = 20;
+
+    std::cout << BHWHITE << "+---------------+--------------------+" << std::endl;
+    std::cout << "| " << std::left << std::setw(serverNumberWidth - 2) << "Server ID" << " | " << std::setw(portWidth - 2) << "Port" << " |" << std::endl;
+    std::cout << "+---------------+--------------------+" << std::endl;
+
+    for (std::vector<std::string>::iterator it2 = ports.begin(); it2 != ports.end(); it2++) {
+        if (!checkSocket(*it2)) {
+            if (createSocket()) {
+                if (!bindSocket(*it2) || !listenSocket() || !setNonBlocking(_server_fds.back()) || !combineFds(_server_fds.back()))
+                    _server_fds.pop_back();
+                else {
+                    assignDomain(*it2, _server_fds.back());
+					printRow(serverNumberWidth - 2,_server_fds.back() - 3, portWidth - 2,_ip_to_server[_server_fds.back()]);
+                }
+            }
+        }
+    }
+
+    std::cout << "+---------------+--------------------+" << RESET << std::endl;
+}
+
 
 Listen getTargetIpAndPort(std::string requestedUrl) {
 	size_t pos = requestedUrl.find(":");
@@ -164,106 +195,92 @@ Listen getTargetIpAndPort(std::string requestedUrl) {
 	return Listen (x_ip, port_x);
 }
 
-// Handle incoming connection from clients
 void Servers::handleIncomingConnection(int server_fd){
 	struct sockaddr_in address;
-	// struct timeval timeout;
-	std::string request;
     socklen_t addrlen = sizeof(address);
-    char ip[INET_ADDRSTRLEN];
     int new_socket = accept(server_fd, (struct sockaddr *)&address, &addrlen);
-	bool finish = false;
     if (new_socket == -1) {
         std::cerr << "Accept failed." << std::endl;
         return;
     }
-	if (inet_ntop(AF_INET, &(address.sin_addr), ip, INET_ADDRSTRLEN) == NULL) {
-    	std::cerr << "inet_ntop failed with error: " << strerror(errno) << std::endl;
-		close(new_socket);
-    	return;
-}
-    std::cout << "Connection established on IP: " << _ip_to_server[server_fd] << ", server:" << server_fd << "\n" << std::endl;
-	int flags = fcntl(new_socket, F_SETFL, FD_CLOEXEC, O_NONBLOCK);//COMMENT THE 0_NONBLOCK LINE IF THE BEHAVIOUR IS UNDEFINED.
-	if (flags == -1)
+	if (combineFds(new_socket) == 0)
 	{
-		std::cerr << "Fcntl failed" << std::endl;
-		close(new_socket);
-		return;
+		if (close(new_socket) == -1)
+			std::cerr << "Close failed with error: " << strerror(errno) << std::endl;
+		return ;
 	}
-	HttpRequest parser;
-
-	int reqStatus = -1;
-	while (!finish){	
-		finish = getRequest(new_socket, request);
-		// std::cout << "Count: " << count++ << std::endl;
-		// send (new_socket, request.c_str(), request.size(), 0);
-		/**
-		 * /// @note reqStatus
-		 * 200 indicates that parsing is ongoing and there is no error
-		 * 100 indicates parsing is complete and successful
-		 * any other number indicates an http req error or incomplete parsing state
-		*/
-		reqStatus = parser.parseRequest(request);
-		if (reqStatus != 200) {
-			finish = true;
-		}
-		if (!handleResponse(reqStatus, server_fd, new_socket, parser))
-			return;
-		// std::string response;
-		// if (reqStatus != 200)
-		// {
-		// 	Listen host_port = getTargetIpAndPort(_ip_to_server[server_fd]);
-
-		// 	DB db = {configDB_.getServers(), configDB_.getRootConfig()};
-		// 	Client client(db, host_port, parser, server_fd_to_index[server_fd], reqStatus);
-		// 	client.setupResponse();
-		// 	response = client.getResponseString();
-		// }
-		// ssize_t bytes = write(new_socket, response.c_str(), response.size());
-		// if (bytes == -1) {
-		// 	std::cerr << "Write failed with error: " << strerror(errno) << std::endl;
-		// 	return;
-		// }
-	} 
-	// std::vector<std::string> domains = _domain_to_server[server_fd];
-	// for (std::vector<std::string>::iterator it = domains.begin(); it != domains.end(); it++)
-	// 	std::cout << "Server domains: " << *it << std::endl;
-	
-	
-	// parser.printRequest(parser);
-	
-	// std::string response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nHello, World!";
-	// std::cout << "I am here now!!" << std::endl;
-    // Close the socket
-    if (close(new_socket) == -1)
-		std::cerr << "Close failed with error: " << strerror(errno) << std::endl;
+	client_to_server[new_socket] = server_fd;
+	_client_data[new_socket] = HttpRequest();
+	setTimeout(new_socket);
+	_client_amount++;
 }
 
-// Initialize events that will be handled by epoll
-void Servers::initEvents(){
-	while (true){
+void Servers::handleIncomingData(int client_fd){
+	int reqStatus = -1;
+	std::string request;
+	int server_fd = client_to_server[client_fd];
+	bool finish = false;
+	// get the request from the client
+	getRequest(client_fd, request);
+	// which client it is
+	reqStatus = _client_data.find(client_fd)->second.parseRequest(request);
+	if (reqStatus != 200) {
+		finish = true;
+	}
+	// here we can check if client requested CGI
+	if (!handleResponse(reqStatus, server_fd, client_fd, _client_data.find(client_fd)->second))
+		return;
+	if (finish && _cgi_clients.find(client_fd) == _cgi_clients.end())
+		deleteClient(client_fd);
+}
+
+// as long as there are events to handle, we will keep looping - giving data as long as there is data to give
+void Servers::initEvents() {
+	while (1){
 		try{
-			struct epoll_event events[_server_fds.size()];
-			int n = epoll_wait(this->_epoll_fds, events, _server_fds.size(), -1);
+			struct epoll_event events[_server_fds.size() + _client_amount];
+			// at the end we will we will monitor child process
+			int n = epoll_wait(this->_epoll_fds, events, _server_fds.size() + _client_amount, 1000);
 			if (n == -1) {
 				std::cerr << "Epoll_wait failed" << std::endl;
 				return ;
 			}
+			// if there are no events to handle, we will continue to the next iteration
 			for (int i = 0; i < n; i++) {
+				bool server = false;
 				for (std::vector<int>::iterator it2 = _server_fds.begin(); it2 != _server_fds.end(); ++it2) {
 					if (events[i].data.fd == *it2) {
-						std::cout << "\nIncoming connection on server: " << *it2 << std::endl;
+						// if the event is a server, we will handle the incoming connection
 						handleIncomingConnection(*it2);
+						server = true;
+						break ;
+					}
+				} // check if it s reqular or CGI
+				// actually it will go to regular one first and create CGI client
+				// then it will go to "if" (if there is child process and will repeatedly handleIncomingCgi)
+				if (!server && events[i].events & EPOLLIN) {
+					// 	std::map<int, int> _cgi_clients_childfd; // map of child fds to each client (idx -> FD of child process)
+					if (_cgi_clients_childfd.find(events[i].data.fd) != _cgi_clients_childfd.end())
+					{
+						setTimeout(_cgi_clients_childfd[events[i].data.fd]);
+						handleIncomingCgi(events[i].data.fd); // fromCgi->returns -1 bc socket non-blockin- nothing to read
+					} // 1. check if client is sending DATA
+					else if (_client_data.find(events[i].data.fd) != _client_data.end())
+					{
+						setTimeout(events[i].data.fd);
+						// go here!
+						handleIncomingData(events[i].data.fd);
 					}
 				}
 			}
 		} catch (std::exception &e){
 			std::cerr << e.what() << std::endl;
 		}
+		checkClientTimeout();
+		// printData();
 	}
 }
 
-// Getting ports from config file
 std::vector<std::string> Servers::getPorts(){
 	
 	std::map<std::string, std::vector<std::string> > config = getKeyValue();
@@ -311,7 +328,6 @@ std::vector<std::string> Servers::getPorts(){
 	return (ports);
 }
 
-// Getting local domains and saving them to a map for each server
 void Servers::assignLocalDomain(int server_fd){
 	std::map<std::string, std::vector<std::string> > config = getKeyValue();
 	for (std::map<std::string, std::vector<std::string> >::iterator it_domain = config.begin(); it_domain != config.end(); it_domain++){
@@ -331,7 +347,6 @@ void Servers::assignLocalDomain(int server_fd){
 	}
 }
 
-// Getting domains and saving them to a map for each server
 void Servers::assignDomain(std::string port, int server_fd){
 	if (port == "80")
 		assignLocalDomain(server_fd);
@@ -361,12 +376,10 @@ void Servers::assignDomain(std::string port, int server_fd){
 	}
 }
 
-// Getter for config file
 std::map<std::string, std::vector<std::string> > Servers::getKeyValue() const {
 	return (this->_keyValues);
 }
 
-// Check if port is valid
 int Servers::checkSocketPort(std::string port){
 	for (std::string::iterator it = port.begin(); it != port.end(); it++)
 	{
@@ -379,7 +392,6 @@ int Servers::checkSocketPort(std::string port){
 	return (0);
 }
 
-// Check if ip is valid
 int Servers::checkSocket(std::string ip){
 	std::string ip_string;
 	std::string port_string;
@@ -417,11 +429,7 @@ bool Servers::getRequest(int client_fd, std::string &request){
 		buffer[bytes] = '\0';
 		request.append(buffer, bytes);
 	}
-	if (bytes == 0)
-	{
-		return true;
-	}
-	if (bytes == -1)
+	else if (bytes == -1)
 	{
 		std::cerr << "Recv failed" << std::endl;
 		return true;
@@ -429,22 +437,193 @@ bool Servers::getRequest(int client_fd, std::string &request){
 	return false;
 }
 
+// here it can happen that client requested CGI
+// 
+		// see RequestConfig.hpp
+		//  Client &client_;
+		//  Listen host_port_;
+		// 	DB db_; - they are creates 1 time only
 size_t Servers::handleResponse(int reqStatus, int server_fd, int new_socket, HttpRequest &parser) {
+		
 		std::string response;
+		
 		if (reqStatus != 200)
-		{
+		{ // stuff happens 1 time only
 			Listen host_port = getTargetIpAndPort(_ip_to_server[server_fd]);
-
 			DB db = {configDB_.getServers(), configDB_.getRootConfig()};
 			Client client(db, host_port, parser, server_fd_to_index[server_fd], reqStatus);
+			
 			client.setupResponse();
+			// if client requested CGI
+			if (client.getResponseRef().getStatus() <= 400 && (client.getCgi() || client.getCgiResponse()))
+			{
+				// create new CgiClient (copy) & add it to epoll structure (FD which ubderstands events)
+				_cgi_clients[new_socket] = NULL;
+				
+				// COPY CONSTRUCTOR FOR CGI CLIENT -> FD : CgiClient
+				// !!!
+				_cgi_clients[new_socket] = new CgiClient(client, this->_epoll_fds);			
+					
+				// saving it into fd of child process
+				// was problem with YES CAT (bc of while loop - while had to go 1 level higher)
+				// cgi handling happens 1 time -> creating client obj 1 time
+				_cgi_clients_childfd[_cgi_clients[new_socket]->getPipeOut()] =  new_socket;
+				return (1);
+			}
 			response = client.getResponseString();
 		}
-		// std::cout << "Response: " << response << std::endl;
 		ssize_t bytes = write(new_socket, response.c_str(), response.size());
 		if (bytes == -1) {
 			std::cerr << "Write failed with error: " << strerror(errno) << std::endl;
 			return 0;
 		}
 		return 1;
+}
+
+int Servers::setNonBlocking(int fd){
+	int flags = fcntl(fd, F_GETFL);
+	if (flags == -1)
+	{
+		std::cerr << "Fcntl failed" << std::endl;
+		return (0);
+	}
+	if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1)
+	{
+		std::cerr << "Fcntl failed" << std::endl;
+		return (0);
+	}
+	if (fcntl(fd, F_SETFD, FD_CLOEXEC) == -1)
+    {
+        std::cerr << "Fcntl failed" << std::endl;
+        return (0);
+    }
+	return (1);
+}
+
+// cycle went here until 200 or 500 will be returned - when it will be nothing to read
+int Servers::handleIncomingCgi(int child_fd){
+	std::string response;
+	int	client_fd;	
+	for (std::map<int, int>::iterator it = _cgi_clients_childfd.begin(); it != _cgi_clients_childfd.end(); it++)
+	{
+		if (it->first == child_fd)
+		{
+			client_fd = it->second;
+			break;
+		}
+	}
+	if (_cgi_clients[client_fd] == NULL)
+	{
+		removeFromEpoll(child_fd);
+		deleteClient(client_fd);
+		for (std::map<int, int>::iterator it = _cgi_clients_childfd.begin(); it != _cgi_clients_childfd.end();)
+		{
+			if (it->second == client_fd)
+			{
+				removeFromEpoll(it->first);	
+				std::map<int, int>::iterator eraseIt = it;
+				// _cgi_clients_childfd.erase(it->first);
+				it++;
+				_cgi_clients_childfd.erase(eraseIt);
+			}
+			else
+				it++;
+		}
+		return 0;
+	}
+	_cgi_clients[client_fd]->HandleCgi(); // !!! MAIN STUFF
+	if (_cgi_clients[client_fd]->getStatusCode() == 200 || _cgi_clients[client_fd]->getStatusCode() == 500)
+	{
+		_cgi_clients[client_fd]->getResponse().createResponse(); // after all data is read -> create response
+		response = _cgi_clients[client_fd]->getResponseString();
+		ssize_t bytes = write(client_fd, response.c_str(), response.size());
+		if (bytes == -1) {
+			std::cerr << "Write failed with error: " << strerror(errno) << std::endl;
+			return 0;
+		}
+		
+		deleteClient(client_fd); // delete client
+		_cgi_clients_childfd.erase(child_fd); // delete FD so it stops looping calling!
+	}
+	return 1;
+}
+
+void Servers::setTimeout(int client_fd){
+	_client_time[client_fd] = time(NULL);
+}
+
+void Servers::checkClientTimeout(){
+	time_t current_time = time(NULL);
+	for (std::map<int, time_t>::iterator it = _client_time.begin(); it != _client_time.end(); it++)
+	{
+		if (_cgi_clients.find(it->first) != _cgi_clients.end())
+		{
+			if (current_time - it->second >= 2)
+			{
+				for (std::map<int, int>::iterator it2 = _cgi_clients_childfd.begin(); it2 != _cgi_clients_childfd.end(); it2++)
+				{
+					if (it2->second == it->first)
+					{
+						handleIncomingCgi(it2->first);
+						return ;
+					}
+				}
+			}
+		}
+		if (current_time - it->second > 10)
+		{
+			std::cout << "Client FD: " << it->first << " timed out\n";
+			deleteClient(it->first);
+			return ;
+		}
+	}
+}
+
+// remove client from waiting list -> remove cgi elements
+// FD removes from epoll
+// pipes are closed
+void Servers::deleteClient(int client_fd)
+{
+	removeFromEpoll(client_fd); // remove client from waiting list -> remove cgi elements
+    if (close(client_fd) == -1)
+		std::cerr << "Close failed with error: " << strerror(errno) << std::endl;
+	if (_client_amount > 0)
+		_client_amount--;
+	if (_cgi_clients.find(client_fd) != _cgi_clients.end())
+	{
+		delete _cgi_clients[client_fd];
+		_cgi_clients.erase(client_fd);
+	}
+	if (_client_data.find(client_fd) != _client_data.end())
+		_client_data.erase(client_fd);
+	if (client_to_server.find(client_fd) != client_to_server.end())
+		client_to_server.erase(client_fd);
+	if (_client_time.find(client_fd) != _client_time.end())
+		_client_time.erase(client_fd);
+}
+
+void Servers::printData()
+{
+	std::cout << "--------CLIENT-TO-SERVER--------" << std::endl;
+	for (std::map<int, int>::iterator it = client_to_server.begin(); it != client_to_server.end(); it++)
+		std::cout << "Client: " << it->first << " Server: " << it->second << std::endl;
+	std::cout << "----------CLIENT-DATA-----------" << std::endl;
+	for (std::map<int, HttpRequest>::iterator it = _client_data.begin(); it != _client_data.end(); it++)
+		std::cout << "Client: " << it->first << std::endl;
+	std::cout << "----------CGI-CLIENTS-----------" << std::endl;
+	for (std::map<int, CgiClient*>::iterator it = _cgi_clients.begin(); it != _cgi_clients.end(); it++)
+		std::cout << "Client: " << it->first << " Response: " << it->second->getResponseString() << std::endl;
+	std::cout << "--------CGI-CLIENTS-CHILDFD--------" << std::endl;
+	for (std::map<int, int>::iterator it = _cgi_clients_childfd.begin(); it != _cgi_clients_childfd.end(); it++)
+		std::cout << "Child: " << it->first << " Client: " << it->second << std::endl;
+	std::cout << "----------CLIENT-TIME-----------" << std::endl;
+	for (std::map<int, time_t>::iterator it = _client_time.begin(); it != _client_time.end(); it++)
+		std::cout << "Client: " << it->first << " Time: " << it->second << std::endl;
+	std::cout << std::endl;
+}
+
+void	Servers::removeFromEpoll(int fd){
+	if (epoll_ctl(this->_epoll_fds, EPOLL_CTL_DEL, fd, NULL) == -1) {
+		std::cerr << "Failed to remove client file descriptor from epoll instance." << std::endl;
+	}
 }

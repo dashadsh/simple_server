@@ -1,3 +1,4 @@
+
 #ifndef HTTP_REQUEST_PARSER_HPP
 #define HTTP_REQUEST_PARSER_HPP
 
@@ -20,7 +21,7 @@ private:
     size_t length_;
     size_t chunk_size_;
     bool isChunked_;
-    int body_offset_; // track curr reqbody pos, then += next chunk
+    int body_offset_;
     struct timeval start_tv_;
     struct timeval last_tv_;
 
@@ -34,7 +35,6 @@ private:
         ERROR
     };
     enum ChunkStatus {
-        // CHUNK,
         CHUNK_BODY,
         CHUNK_SIZE
     };
@@ -48,25 +48,14 @@ private:
     bool isValidPath(const std::string& path);
     bool isValidQuery(const std::string& query);
     bool isValidFragment(const std::string& fragment);
-    // bool isAlpha(char c);
-    // bool isDigit(char c);
-    // bool isAlphaNum(char c);
     void print_uri_extracts();
-    // bool isUnreserved(char c);
-    // bool isSubDelim(char c);
-    // bool isHexDigit(char c);
     bool isValidIPv6(const std::string& ipv6);
     int isValidProtocol(const std::string& protocol);
-    // std::string trim(const std::string& str);
-
-    // unsigned int hexToDecimal(const std::string& hex);
     void parseContentLength();
-    // bool isMethodCharValid(char ch) const;
     int parseMethod();
     int validateURI();
     int extractRequestLineData(std::string requestLine);
     std::string trimmer(const std::string& str);
-    // void handleSpecialHeaders(const std::string& header, const std::string& value);
     bool isValidHeaderChar(unsigned char c);
     bool isValidHeaderFormat(const std::string& header);
     int parseHeaders();
@@ -79,11 +68,14 @@ private:
     void extractPathQueryFragment(size_t pathStart);
     void parseSchemeAndAuthority(size_t schemeEnd, size_t& pathStart);
     std::string decodeURIComponent(const std::string& str);
+    std::string uri_suffix_;
 
 
 public:
     HttpRequest();
     ~HttpRequest();
+    HttpRequest(const HttpRequest &rhs);
+    HttpRequest &operator=(const HttpRequest &rhs);
 
     int parseRequest(std::string &buffer);
 
@@ -93,15 +85,17 @@ public:
     std::string &getQuery();
     std::string &getFragment();
     std::string &getProtocol();
+    const std::string &getBody() const;
     std::string &getBody();
     std::string &getHeader(std::string key);
     std::map<std::string, std::string> getHeaders() const;
     std::string getTarget() const;
     size_t getContentLength();
+    std::string getUriSuffix();
+    void setUriSuffix(std::string& uri);
 
     void setTarget(std::string target);
     void printRequest(HttpRequest parser);
-
 
     bool timeout();
     time_t get_start_timer_in_sec();

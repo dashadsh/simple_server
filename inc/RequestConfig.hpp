@@ -1,7 +1,10 @@
+
 #ifndef REQUESTCONFIG_HPP
 #define REQUESTCONFIG_HPP
 
 #include "./AllHeaders.hpp"
+#include "./DB.hpp"
+#include "./Listen.hpp"
 
 class HttpRequest;
 class Client;
@@ -28,13 +31,20 @@ class RequestConfig
 public:
   RequestConfig(HttpRequest &request, Listen &host_port, DB &db, Client &client);
   ~RequestConfig();
+  RequestConfig(const RequestConfig &rhs);
+  RequestConfig(const RequestConfig &rhs, HttpRequest &request, Client &client);
+  RequestConfig &operator=(const RequestConfig &rhs);
+
+
   const VecStr &filterDataByDirectives(const std::vector<KeyMapValue> &values, std::string directive, std::string location);
   const VecStr &cascadeFilter(std::string directive, std::string location);
   const VecStr &checkRootDB(std::string directive);
-  LocationModifier checkModifier(const std::string &modifiers);
+  LocationModifier setModifier(const std::string &modifiers);
   bool isMethodAccepted(std::string &method);
   void redirectLocation(std::string target);
   std::string locationExtractor(const std::string &locationStr);
+  std::string findLongestMatch();
+  std::string findLongestMatch(std::string target);
 
   void setUp(size_t targetServerIdx);
   void setTarget(const std::string &target);
@@ -49,10 +59,13 @@ public:
   void setAuth(const VecStr &auths);
   void setUpload(const VecStr &upload);
   void setCgi(const VecStr &cgi);
-  void setCgiBin(const VecStr &cgiBin);
   void setLocationsMap(const std::vector<KeyMapValue> &values);
   void setRedirectMap(const VecStr &redirects);
+  void setRedirCode(int code);
 
+  std::string getUriSuffix();
+
+  int &getRedirCode();
   std::string &getTarget();
   std::string &getRequestTarget();
   std::string &getQuery();
@@ -69,7 +82,7 @@ public:
   std::map<int, std::string> &getRedirectionMap();
   std::vector<std::string> &getMethods();
   std::string &getMethod();
-  std::string &getBody();
+  const std::string &getBody() const;
   std::map<std::string, std::string> getHeaders();
   std::string &getHeader(std::string key);
   std::string &getProtocol();
@@ -77,25 +90,34 @@ public:
   std::string &getAuth();
   std::string &getUpload();
   std::vector<std::string> &getCgi();
-  std::string &getCgiBin();
   std::map<std::string, int> &getLocationsMap();
   RequestConfig *getRequestLocation(std::string request_target);
   bool directiveExists(std::string directive, std::string location);
   void returnRedirection();
   void setBestMatch(std::string &newTarget);
+  void setLociMatched(int val);
+  int getLociMatched();
+  void setTargetSensitivity();
+  bool isCgi(std::string path);
+  void setCgi(bool& val);
+  bool get_Cgi();
+  void setSubstr(int start);
+  std::string &getBody();
 
   void setMap(const VecStr &vec, std::map<int, std::string> &resultMap, std::string &codes);
   void assignCodes(const std::string &codes, const std::string &page, std::map<int, std::string> &resultMap);
 
   void printConfigSetUp();
+  void setClient(Client &client);
+  std::string location_cache_;
 
 private:
   HttpRequest &request_;
   std::vector<KeyMapValue> targetServer_;
   Client &client_;
-  Listen &host_port_;
-  DB &db_;
-  // LocationModifier modifierType_;
+  Listen host_port_;
+  DB db_;
+  LocationModifier modifierType_;
   std::string target_;
   std::string root_;
   std::string uri_;
@@ -109,8 +131,10 @@ private:
   std::string auth_;
   std::string upload_;
   std::vector<std::string> cgi_;
-  std::string cgi_bin_;
   std::map<std::string, int> locationsMap_;
+  int isLociMatched_;
+  std::string uri_suffix_;
+  int redir_code_;
 };
 
 #endif

@@ -1,3 +1,4 @@
+
 #include "../../inc/HttpResponse.hpp"
 
 std::pair<std::string, double> HttpResponse::extractLangAndQ(const std::string &langAndQ)
@@ -30,11 +31,6 @@ std::pair<std::string, double> HttpResponse::extractLangAndQ(const std::string &
 std::string HttpResponse::findBestLanguage(const std::vector<std::string> &matches, const std::vector<std::pair<std::string, double> > &langQPairs)
 {
   std::string bestLanguage;
-  /// @note rates lang preference
-  // e.g Accept-Language: en-US,en;q=0.8,fr;q=0.7
-  // en-US: No specified q value, defaults to 1.0 (highest).
-  // en;q=0.8: English with a q value of 0.8.
-  // fr;q=0.7: French with a q value of 0.7.
   double bestQValue = 0.0;
 
   for (std::vector<std::pair<std::string, double> >::const_iterator it = langQPairs.begin(); it != langQPairs.end(); ++it)
@@ -46,7 +42,7 @@ std::string HttpResponse::findBestLanguage(const std::vector<std::string> &match
     {
       bestLanguage = matches.front();
       bestQValue = qValue;
-      break; // Use the first language as default
+      break;
     }
     else
     {
@@ -56,7 +52,7 @@ std::string HttpResponse::findBestLanguage(const std::vector<std::string> &match
         {
           bestLanguage = *matchIt;
           bestQValue = qValue;
-          break; // Found a better match, no need to continue
+          break;
         }
       }
     }
@@ -65,39 +61,6 @@ std::string HttpResponse::findBestLanguage(const std::vector<std::string> &match
   return bestLanguage;
 }
 
-// bool HttpResponse::localization(std::vector<std::string> &matches)
-// {
-//   std::string all = config_.getHeader("Accept-Language");
-
-//   std::vector<std::pair<std::string, double> > langQPairs;
-//   std::size_t pos = 0;
-//   while (pos < all.length())
-//   {
-//     std::size_t nextComma = all.find(',', pos);
-//     std::string langAndQ = all.substr(pos, (nextComma == std::string::npos) ? std::string::npos : nextComma - pos);
-//     langQPairs.push_back(extractLangAndQ(langAndQ));
-
-//     if (nextComma == std::string::npos)
-//       break;
-//     else
-//       pos = nextComma + 1;
-//   }
-
-//   std::string bestLanguage = findBestLanguage(matches, langQPairs);
-
-//   if (bestLanguage.empty())
-//     bestLanguage = "en"; // Default to English
-
-//   if (!bestLanguage.empty())
-//   {
-//     matches.clear();
-//     matches.push_back(bestLanguage);
-//     headers_["Content-Language"] = bestLanguage;
-//     return true;
-//   }
-
-//   return false;
-// }
 int ftstoi(const std::string &str, std::size_t *pos = NULL, int base = 10) {
     static const std::string baseChars = "0123456789abcdef";
 
@@ -138,20 +101,17 @@ bool HttpResponse::localization(std::vector<std::string> &matches) {
     headers_["Content-Language"] = defaultLanguage;
 
     while (!all.empty()) {
-        // Extract the next language tag
         std::size_t pos = all.find_first_of(" ,;\0");
         std::string str = all.substr(0, pos);
         all.erase(0, pos);
 
-        // Check if the language tag contains a quality value
-        int q = 10; // Default quality value
+        int q = 10;
         if (all.find(".") != std::string::npos) {
             std::size_t qPos;
             q = ftstoi(all.substr(all.find_first_of(".") + 1, 1).c_str(), &qPos);
             all.erase(0, qPos);
         }
 
-        // Filter matches based on the language tag
         std::vector<std::string> newMatches;
         if (str.find("*") == std::string::npos) {
             for (std::vector<std::string>::iterator it = matches.begin(); it != matches.end(); ++it) {
@@ -162,7 +122,6 @@ bool HttpResponse::localization(std::vector<std::string> &matches) {
             newMatches = matches;
         }
 
-        // Update selectMatches if conditions met
         if (!newMatches.empty() && q > maxQ) {
             selectMatches = newMatches;
             if (str[0] != '*')
@@ -170,7 +129,6 @@ bool HttpResponse::localization(std::vector<std::string> &matches) {
             maxQ = q;
         }
 
-        // Check for end of Accept-Language list
         if (all.find(",") == std::string::npos) {
             if (!selectMatches.empty()) {
                 matches = selectMatches;
@@ -179,7 +137,6 @@ bool HttpResponse::localization(std::vector<std::string> &matches) {
             return false;
         }
 
-        // Remove processed language tag
         all.erase(0, all.find_first_of("abcdefghijklmnoprstuvwxyz*"));
     }
 

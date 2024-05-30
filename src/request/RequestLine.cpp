@@ -1,3 +1,4 @@
+
 #include "../../inc/HttpRequest.hpp"
 
 int HttpRequest::extractRequestLineData(std::string requestLine)
@@ -11,11 +12,9 @@ int HttpRequest::extractRequestLineData(std::string requestLine)
     uriStart = methodEnd + 1;
     protocolStart = requestLine.rfind(' ');
 
-    // Check if both URI and protocol positions are valid
     if (methodEnd == std::string::npos || protocolStart == std::string::npos || protocolStart <= uriStart)
         return 400;
 
-    // Extract METHOD, URI and Protocol
     method_ = requestLine.substr(0, methodEnd);
     uri_ = requestLine.substr(uriStart, protocolStart - uriStart);
     (uri_.find("?") != std::string::npos) ? setTarget(uri_.substr(0, uri_.find("?"))) : setTarget(uri_);
@@ -60,7 +59,6 @@ int HttpRequest::parseMethod()
         "GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD", "TRACE", "CONNECT"};
     static const std::set<std::string> validMethods(validMethodsArray, validMethodsArray + sizeof(validMethodsArray) / sizeof(validMethodsArray[0]));
 
-    // Check if the method is valid and in uppercase
     if (validMethods.find(method_) == validMethods.end())
         return 501;
 
@@ -132,19 +130,19 @@ std::string HttpRequest::decodeURIComponent(const std::string &str)
     for (size_t i = 0; i < str.length(); ++i)
     {
         if (str[i] == '%')
-        { // Percent-encoded sequence
+        {
             if (i + 2 < str.length())
             {
-                // Check if there are two hex characters following '%'
                 char hex1 = str[i + 1];
                 char hex2 = str[i + 2];
                 if (isxdigit(hex1) && isxdigit(hex2))
                 {
                     int value;
                     std::istringstream hexStream(str.substr(i + 1, 2));
-                    hexStream >> std::hex >> value;      // Convert hex characters to integer value
-                    decoded += static_cast<char>(value); // Append decoded character
-                    i += 2;                              // Move to next character
+                    hexStream >> std::hex >> value;
+                    char decodedChar = static_cast<char>(value);
+                    decoded.append(&decodedChar, 1);
+                    i += 2;
                 }
                 else
                     decoded += str[i];
@@ -183,7 +181,7 @@ bool HttpRequest::isValidScheme(const std::string &scheme)
         return true;
 
     if (!isAlpha(scheme[0]))
-        return false; // Scheme must start with a letter
+        return false;
 
     std::string lowercaseScheme = scheme;
     for (size_t i = 0; i < lowercaseScheme.length(); ++i)
@@ -226,15 +224,13 @@ int HttpRequest::isValidAuthority(const std::string &authority)
         }
     }
 
-    // Check host, allowing for IPv6 and percent-encoded characters
     if (host.empty())
     {
-        return 402; // Host cannot be empty
+        return 402;
     }
 
     if (host[0] == '[' && host[host.length() - 1] == ']')
     {
-        // IPv6 address format, remove brackets for validation
         std::string ipv6Host = host.substr(1, host.length() - 2);
         if (!isValidIPv6(ipv6Host))
         {
@@ -243,7 +239,6 @@ int HttpRequest::isValidAuthority(const std::string &authority)
     }
     else
     {
-        // Regular hostname or IPv4 address
         for (size_t i = 0; i < host.length(); ++i)
         {
             if (!isUnreserved(host[i]) && !isSubDelim(host[i]) && host[i] != ':')
@@ -253,20 +248,17 @@ int HttpRequest::isValidAuthority(const std::string &authority)
         }
     }
 
-    // Check port
     if (!port.empty())
     {
         for (size_t i = 0; i < port.length(); ++i)
         {
             if (!isDigit(port[i]))
-            {
                 return 403;
-            }
         }
         int portValue = atoi(port.c_str());
         if (portValue < 0 || portValue > 65535)
         {
-            return 403; // Port out of valid range
+            return 403;
         }
     }
 
@@ -279,7 +271,7 @@ bool HttpRequest::isValidPath(const std::string &path)
 
     if (path.empty() || path[0] != '/')
     {
-        return false; // Path must start with '/'
+        return false;
     }
 
     for (size_t i = 0; i < path.length(); ++i)
@@ -287,11 +279,10 @@ bool HttpRequest::isValidPath(const std::string &path)
         char c = path[i];
         if (isUnreserved(c) || isSubDelim(c) || c == ':' || c == '@' || c == '/')
         {
-            continue; // Allowed characters
+            continue;
         }
         else if (c == '%' && i + 2 < path.length())
         {
-            // Check percent-encoded characters
             char hex1 = path[i + 1];
             char hex2 = path[i + 2];
             if (isHexDigit(hex1) && isHexDigit(hex2))
@@ -317,11 +308,10 @@ bool HttpRequest::isValidQuery(const std::string &query)
         char c = query[i];
         if (isUnreserved(c) || isSubDelim(c) || c == ':' || c == '@' || c == '?' || c == '/' || c == '#' || c == '[' || c == ']' || c == '&' || c == '=' || c == '+' || c == '$' || c == ',' || c == ';')
         {
-            continue; // Allowed characters
+            continue;
         }
         else if (c == '%' && i + 2 < query.length())
         {
-            // Check percent-encoded characters
             char hex1 = query[i + 1];
             char hex2 = query[i + 2];
             if (isHexDigit(hex1) && isHexDigit(hex2))
@@ -351,7 +341,6 @@ bool HttpRequest::isValidFragment(const std::string &fragment)
         }
         else if (c == '%' && i + 2 < fragment.length())
         {
-            // Check percent-encoded characters
             char hex1 = fragment[i + 1];
             char hex2 = fragment[i + 2];
             if (isHexDigit(hex1) && isHexDigit(hex2))
@@ -366,12 +355,29 @@ bool HttpRequest::isValidFragment(const std::string &fragment)
     return true;
 }
 
+void HttpRequest::setUriSuffix(std::string& uri) {
+    std::string::size_type dotPos = uri.find('.');
+    if (dotPos != std::string::npos) {
+        std::string::size_type nextSlashPos = uri.find('/', dotPos);
+        if (nextSlashPos != std::string::npos) {
+            uri_suffix_ = uri.substr(nextSlashPos + 1);
+            uri = uri.substr(0, nextSlashPos);
+            setTarget(uri);
+        }
+    }
+}
+
+std::string HttpRequest::getUriSuffix() {
+    return uri_suffix_;
+}
+
+
 int HttpRequest::validateURI()
 {
+    setUriSuffix(uri_);
     if (uri_.empty())
         return false;
     int hasAuthority = extractURIComponents();
-    // print_uri_extracts();
 
     if (!isValidScheme(scheme_))
         return 400;
@@ -388,50 +394,33 @@ int HttpRequest::validateURI()
 
 bool HttpRequest::isValidIPv6(const std::string &ipv6)
 {
-    // Count the number of colons
     size_t numColons = 0;
     for (size_t i = 0; i < ipv6.length(); ++i)
     {
         if (ipv6[i] == ':')
-        {
             numColons++;
-        }
     }
 
-    // If there are more than 7 colons or it contains "::" without being the only "::",
-    // it's not a valid IPv6 address
     if (numColons > 7 || ipv6.find("::") != std::string::npos || (numColons == 7 && ipv6[ipv6.length() - 1] == ':'))
-    {
         return false;
-    }
 
-    // Split the string into groups separated by ":"
     std::vector<std::string> groups;
     std::string group;
     std::istringstream iss(ipv6);
     while (std::getline(iss, group, ':'))
-    {
         groups.push_back(group);
-    }
 
-    // Check each group
     for (size_t i = 0; i < groups.size(); ++i)
     {
         const std::string &g = groups[i];
-        // Each group should be 1-4 hexadecimal characters
         if (g.empty() || g.length() > 4)
-        {
             return false;
-        }
 
-        // Check if all characters are hexadecimal
         for (size_t j = 0; j < g.length(); ++j)
         {
             char c = g[j];
             if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')))
-            {
                 return false;
-            }
         }
     }
 
@@ -440,16 +429,12 @@ bool HttpRequest::isValidIPv6(const std::string &ipv6)
 
 int HttpRequest::isValidProtocol(const std::string &protocol)
 {
-    // Format should be "HTTP/x.y"
     if (protocol.substr(0, 5) != "HTTP/")
         return false;
 
-    // Check version format
     std::string version = protocol.substr(5);
     if (version.size() < 3 || version[0] != '1' || version[1] != '.')
-        return 505; // Not Supported
-
-    // Check if the rest of the version are digits
+        return 505;
     for (size_t i = 2; i < version.size(); i++)
     {
         if (!isdigit(version[i]))
