@@ -96,6 +96,8 @@ std::string Client::getResponseString()
 	return response_->getSampleResponse();
 }
 
+// -------------------------------------------------------------------------------------
+
 void Client::setCgi(bool &val)
 {
 	is_cgi_ = val;
@@ -111,6 +113,8 @@ bool Client::getCgi()
 {
 	return is_cgi_;
 }
+
+// -------------------------------------------------------------------------------------
 
 void Client::printRouting() {
 	std::string redir = config_->getRoot() + response_->redirect_target();

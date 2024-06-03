@@ -538,10 +538,12 @@ std::map<std::string, std::string> &HttpResponse::getHeadersRef()
 	return headers_;
 }
 
+// ---------------------------------------------------
 bool HttpResponse::getCgiStatus()
 {
 	return cgi_true_;
 }
+// ---------------------------------------------------
 
 int HttpResponse::getStatus(){
 	return status_code_;

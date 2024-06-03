@@ -74,6 +74,7 @@ public:
 	std::string getResponseBody();
 	int sendResponse(int fd);
 	std::string getSampleResponse();
+	// --------------------------------------------------------
 	bool isCgi(std::string extension);
 
 	void HandleCgi();
@@ -83,6 +84,7 @@ public:
 	void handleCgiHeaders(std::string &body);
 	void parseCgiHeaders();
 	void closeParentCgiPipe(CgiHandle &cgi);
+	// --------------------------------------------------------
 	void setStatusCode(int code);
 	void setHeader(std::string key, std::string value);
 	void appendBody(char *buffer, int size);

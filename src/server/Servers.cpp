@@ -4,14 +4,27 @@
 Servers::Servers(ConfigDB &configDB) : _epoll_fds(-1), _server_fds(), _domain_to_server(), _ip_to_server(), 
 	_keyValues(), server_index(), server_fd_to_index(), client_to_server(), _client_amount(0),
 	_client_data(), _cgi_clients_childfd(), _client_time(), configDB_(configDB)
+	// need to avoid condition jumps BUT
+	// some have def initializers.
 {
 	servers = this;
-	stop_fd = -1;
-	_cgi_clients = std::map<int, CgiClient*>();
+	stop_fd = -1; // move to the top
+	_cgi_clients = std::map<int, CgiClient*>(); // DELETE
 	_keyValues = configDB_.getKeyValue();
-	createServers();
+	createServers(); // -> ePoll
 	initEvents();
 }
+
+
+// CLEANED UP CONSTRUCTOR
+//Servers::Servers(ConfigDB &configDB)
+//    : _epoll_fds(-1), _client_amount(0), stop_fd(-1), configDB_(configDB)
+//{
+//    servers = this;
+//    _keyValues = configDB_.getKeyValue();
+//    createServers(); // ePoll
+//    initEvents();
+//}
 
 Servers::~Servers() {
 	for (std::map<int, CgiClient*>::iterator it = _cgi_clients.begin(); it != _cgi_clients.end(); it++)
@@ -55,6 +68,8 @@ Servers &Servers::operator=(const Servers &rhs) {
     }
     return *this;
 }
+
+//------------------------------------------------------------------------------------------
 
 int Servers::createSocket(){
 	int server_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -129,18 +144,40 @@ int Servers::listenSocket(){
 	return (1);
 }
 
-int Servers::combineFds(int socket_fd){
+// add file descriptor to epoll instance for monitoring, takes "new_socket"
+// 		int new_socket = accept(server_fd, (struct sockaddr *)&address, &addrlen);
+int Servers::combineFds(int socket_fd){ // socket_fd - file descriptor to be monitored by epoll instance
+
+// struct epoll_event
+//{
+//  uint32_t events;	/* Epoll events */ = EPOLLIN (indicates that FD is ready for reading)
+//  epoll_data_t data;	/* User data variable */
+// } __EPOLL_PACKED;
+
+	// epoll_event structure is used to describe interest in particular file descriptor
 	struct epoll_event event;
 	std::memset(&event, 0, sizeof(event));
 	event.events = EPOLLIN;
+
+//	typedef union epoll_data
+//{
+//  void *ptr;
+//  int fd;
+//  uint32_t u32;
+//  uint64_t u64;
+//} epoll_data_t;
+
+	// event.data.fd = new_socket - file descriptor to be monitored by epoll instance
 	event.data.fd = socket_fd;
+
+	// function to control epoll interface -> add / modify / remove FD from epoll instance
+	// ->_epoll_fds => see "epoll_create1"
 	if (epoll_ctl(this->_epoll_fds, EPOLL_CTL_ADD, socket_fd, &event) == -1) {
 		std::cerr << "Epoll_ctl failed" << std::endl;
 		return (0);
 	}
 	return (1);
 }
-
 
 void printRow(int width, int serverNum, int ipWidth, std::string ip) {
 	std::cout << "| " << std::left << std::setw(width) << serverNum << " | " << std::setw(ipWidth) << ip << " |" << std::endl;	
@@ -195,38 +232,56 @@ Listen getTargetIpAndPort(std::string requestedUrl) {
 	return Listen (x_ip, port_x);
 }
 
+// handle incoming connection to the server
 void Servers::handleIncomingConnection(int server_fd){
-	struct sockaddr_in address;
-    socklen_t addrlen = sizeof(address);
+
+	// address of the client "endpoint address", used for:
+	// accept, bind, connect, and recvfrom
+	struct sockaddr_in address; // address data
+    socklen_t addrlen = sizeof(address); // size of structure above
+
+	// accept the connection from the client and create a new socket
+	// socket is created for the client to communicate with the server
     int new_socket = accept(server_fd, (struct sockaddr *)&address, &addrlen);
     if (new_socket == -1) {
         std::cerr << "Accept failed." << std::endl;
         return;
     }
+
+	// set the new socket to be non-blocking by using epoll -> close new_socket
 	if (combineFds(new_socket) == 0)
 	{
 		if (close(new_socket) == -1)
 			std::cerr << "Close failed with error: " << strerror(errno) << std::endl;
 		return ;
 	}
+
+	// 	std::map<int, int> client_to_server; -------------- MAP CLIENT->SERVER from HERE
 	client_to_server[new_socket] = server_fd;
+	// 	std::map<int, HttpRequest> _client_data; ------------ SEE handleIncomingData
 	_client_data[new_socket] = HttpRequest();
+
 	setTimeout(new_socket);
 	_client_amount++;
 }
 
-void Servers::handleIncomingData(int client_fd){
+// here we will check for the first time if client requested CGI
+void Servers::handleIncomingData(int client_fd) { 
+
 	int reqStatus = -1;
 	std::string request;
-	int server_fd = client_to_server[client_fd];
+	int server_fd = client_to_server[client_fd]; // see ----- HandleIncomingConnection
 	bool finish = false;
+
 	// get the request from the client
 	getRequest(client_fd, request);
-	// which client it is
+
+	// which client it is?
 	reqStatus = _client_data.find(client_fd)->second.parseRequest(request);
 	if (reqStatus != 200) {
 		finish = true;
 	}
+
 	// here we can check if client requested CGI
 	if (!handleResponse(reqStatus, server_fd, client_fd, _client_data.find(client_fd)->second))
 		return;
@@ -234,37 +289,69 @@ void Servers::handleIncomingData(int client_fd){
 		deleteClient(client_fd);
 }
 
-// as long as there are events to handle, we will keep looping - giving data as long as there is data to give
+/*
+typedef union epoll_data
+{
+  void *ptr;
+  int fd;
+  uint32_t u32;
+  uint64_t u64;
+} epoll_data_t;
+
+struct epoll_event
+{
+  uint32_t events;
+  epoll_data_t data;
+} __EPOLL_PACKED;
+*/
+
+// as long as there are events to handle, we will keep looping
+// events are notifications from epoll interface about the changes in status of FD
 void Servers::initEvents() {
-	while (1){
+	while (1) {
 		try{
 			struct epoll_event events[_server_fds.size() + _client_amount];
-			// at the end we will we will monitor child process
+// ??? at the end we will we will monitor child process --------------------- ??? 
+			
+			// 1. instance to which FD attached // 	int _epoll_fds;
+			// 2. arr of epoll events // JUST INITIALIZED
+			// 3. max number of events to handle // std::vector<int> _server_fds;
+			// 4. timeout // 1000 ms = 1 sec
 			int n = epoll_wait(this->_epoll_fds, events, _server_fds.size() + _client_amount, 1000);
 			if (n == -1) {
 				std::cerr << "Epoll_wait failed" << std::endl;
 				return ;
-			}
-			// if there are no events to handle, we will continue to the next iteration
+			} 
+
+			// n -> nbr of FD with events ready
+			// if there are events to handle, we will loop through them
 			for (int i = 0; i < n; i++) {
 				bool server = false;
 				for (std::vector<int>::iterator it2 = _server_fds.begin(); it2 != _server_fds.end(); ++it2) {
+					// [i] <- we initialized it: struct epoll_event events[_server_fds.size() + _client_amount];
 					if (events[i].data.fd == *it2) {
+
 						// if the event is a server, we will handle the incoming connection
-						handleIncomingConnection(*it2);
-						server = true;
+						handleIncomingConnection(*it2); // SEE EPOLL
+
+						server = true; // --------- qestion regarding TRUE
 						break ;
 					}
-				} // check if it s reqular or CGI
-				// actually it will go to regular one first and create CGI client
-				// then it will go to "if" (if there is child process and will repeatedly handleIncomingCgi)
+				} 
+				
+				// check if it s reqular request or CGI
+				// 1. actually it will go to regular one first and create CGI client
+				// 2. then it will go to "if" (if there is child process and will (repeatedly) handleIncomingCgi)
 				if (!server && events[i].events & EPOLLIN) {
 					// 	std::map<int, int> _cgi_clients_childfd; // map of child fds to each client (idx -> FD of child process)
 					if (_cgi_clients_childfd.find(events[i].data.fd) != _cgi_clients_childfd.end())
 					{
 						setTimeout(_cgi_clients_childfd[events[i].data.fd]);
 						handleIncomingCgi(events[i].data.fd); // fromCgi->returns -1 bc socket non-blockin- nothing to read
-					} // 1. check if client is sending DATA
+					} 
+					
+					// 1. check if client is sending DATA
+					// _client_data[new_socket] = HttpRequest(); --------- from HandlingIncomingConnection
 					else if (_client_data.find(events[i].data.fd) != _client_data.end())
 					{
 						setTimeout(events[i].data.fd);
@@ -273,7 +360,8 @@ void Servers::initEvents() {
 					}
 				}
 			}
-		} catch (std::exception &e){
+		} 
+		catch (std::exception &e){
 			std::cerr << e.what() << std::endl;
 		}
 		checkClientTimeout();
@@ -440,9 +528,9 @@ bool Servers::getRequest(int client_fd, std::string &request){
 // here it can happen that client requested CGI
 // 
 		// see RequestConfig.hpp
-		//  Client &client_;
-		//  Listen host_port_;
-		// 	DB db_; - they are creates 1 time only
+		// ----  Client &client_;
+		// ---- Listen host_port_;
+		// ----	DB db_; - they are creates 1 time only
 size_t Servers::handleResponse(int reqStatus, int server_fd, int new_socket, HttpRequest &parser) {
 		
 		std::string response;

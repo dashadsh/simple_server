@@ -414,6 +414,8 @@ void RequestConfig::setUpload(const VecStr &upload)
     upload_ = upload[0];
 }
 
+// --------------------------------------------------------
+
 void RequestConfig::setCgi(bool& val)
 {
     client_.setCgi(val);
@@ -434,6 +436,8 @@ bool RequestConfig::isCgi(std::string path)
     client_.setCgi(result);
     return result;
 }
+
+// --------------------------------------------------------
 
 void RequestConfig::setAutoIndex(const VecStr autoindex)
 {

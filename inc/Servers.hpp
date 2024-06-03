@@ -3,12 +3,12 @@
 # define SERVERS_HPP
 #include "AllHeaders.hpp"
 
-class ConfigDB;
-class InputArgs;
-struct DB;
-struct Listen;
-class HttpRequest;
-class CgiClient;
+class	ConfigDB;
+class	InputArgs;
+struct	DB;
+struct	Listen;
+class	HttpRequest;
+class	CgiClient;
 
 class Servers {
 	private:
@@ -19,9 +19,9 @@ class Servers {
 		std::map<std::string, std::vector<std::string> > _keyValues;
 		std::map<int, std::vector<std::string> > server_index;
 		std::map<int, int> server_fd_to_index;
-		std::map<int, int> client_to_server;
+		std::map<int, int> client_to_server; // in void Servers::handleIncomingConnection(int server_fd){
 		int	_client_amount;
-		std::map<int, HttpRequest> _client_data;
+		std::map<int, HttpRequest> _client_data; // in void Servers::handleIncomingData(int client_fd){
 		
 		std::map<int, CgiClient*> _cgi_clients; // map of cgi clients
 		std::map<int, int> _cgi_clients_childfd; // map of child fds to each client (idx -> FD of child process)
@@ -55,18 +55,18 @@ class Servers {
 		void	deleteClient(int client_fd);
 		std::vector<std::string> getPorts();
 		std::map<std::string, std::vector<std::string> > getKeyValue() const;
-		bool getRequest(int client_fd, std::string &request);
-		int setNonBlocking(int fd);
-		void printData();
-		void removeFromEpoll(int fd);
+		bool	getRequest(int client_fd, std::string &request);
+		int		setNonBlocking(int fd);
+		void	printData();
+		void	removeFromEpoll(int fd);
 
-		void handleIncomingConnection(int server_fd);
-		void handleIncomingData(int client_fd);
-		void printServerAddress(int server_fd);
-		size_t handleResponse(int reqStatus, int server_fd, int new_socket, HttpRequest &parser);
-		void checkClientTimeout();
-		void setTimeout(int client_fd);
-		int handleIncomingCgi(int client_fd);
+		void	handleIncomingConnection(int server_fd);
+		void	handleIncomingData(int client_fd);
+		void	printServerAddress(int server_fd);
+		size_t	handleResponse(int reqStatus, int server_fd, int new_socket, HttpRequest &parser);
+		void	checkClientTimeout();
+		void	setTimeout(int client_fd);
+		int		handleIncomingCgi(int client_fd);
 };
 
 #endif

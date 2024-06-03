@@ -98,9 +98,11 @@ public:
   void setLociMatched(int val);
   int getLociMatched();
   void setTargetSensitivity();
+  // --------------------------------------------------------
   bool isCgi(std::string path);
   void setCgi(bool& val);
   bool get_Cgi();
+  // --------------------------------------------------------
   void setSubstr(int start);
   std::string &getBody();
 
@@ -130,7 +132,7 @@ private:
   size_t serverId;
   std::string auth_;
   std::string upload_;
-  std::vector<std::string> cgi_;
+  std::vector<std::string> cgi_; // -------------------------------------------------------
   std::map<std::string, int> locationsMap_;
   int isLociMatched_;
   std::string uri_suffix_;
