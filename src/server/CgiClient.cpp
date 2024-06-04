@@ -136,7 +136,8 @@ void CgiClient::parseCgiHeaders()
 
 void CgiClient::handleCgiHeaders(std::string &body_)
 {
-	std::string::size_type pos;
+	std::string::size_type pos = std::string::npos;
+	
 	if (body_.find("\r\n\r\n") != std::string::npos)
 		pos = body_.find("\r\n\r\n");
 	else if (body_.find("\r\n") != std::string::npos)
