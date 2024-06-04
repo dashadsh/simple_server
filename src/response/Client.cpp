@@ -138,6 +138,7 @@ void Client::printRouting() {
 		std::cout << ", " << HIBGGREEN << "Port: " << host_port_.port_ << RESET << std::endl;
 }
 
+// =====================================================================================
 void Client::setupResponse()
 {
 	if (!request_)
@@ -177,6 +178,7 @@ void Client::setupResponse()
 		request_ = NULL;
 
 }
+//======================================================================================
 
 HttpRequest *Client::getRequest(bool val) {
 	if (!request_ && val)

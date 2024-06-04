@@ -233,6 +233,7 @@ Listen getTargetIpAndPort(std::string requestedUrl) {
 }
 
 // handle incoming connection to the server
+// client , timeout etc
 void Servers::handleIncomingConnection(int server_fd){
 
 	// address of the client "endpoint address", used for:
@@ -259,7 +260,8 @@ void Servers::handleIncomingConnection(int server_fd){
 	// 	std::map<int, int> client_to_server; -------------- MAP CLIENT->SERVER from HERE
 	client_to_server[new_socket] = server_fd;
 	// 	std::map<int, HttpRequest> _client_data; ------------ SEE handleIncomingData
-	_client_data[new_socket] = HttpRequest();
+	_client_data[new_socket] = HttpRequest(); // create object in MAP - everzy client had object anyway, but now it is init in a map
+	// SAVING AS AN OBJECT
 
 	setTimeout(new_socket);
 	_client_amount++;
@@ -276,7 +278,7 @@ void Servers::handleIncomingData(int client_fd) {
 	// get the request from the client
 	getRequest(client_fd, request);
 
-	// which client it is?
+	// which client it is? which state of rquisting we are now at
 	reqStatus = _client_data.find(client_fd)->second.parseRequest(request);
 	if (reqStatus != 200) {
 		finish = true;
@@ -536,26 +538,36 @@ size_t Servers::handleResponse(int reqStatus, int server_fd, int new_socket, Htt
 		std::string response;
 		
 		if (reqStatus != 200)
-		{ // stuff happens 1 time only
+		{ 	// stuff happens 1 time only
+			//objects
 			Listen host_port = getTargetIpAndPort(_ip_to_server[server_fd]);
 			DB db = {configDB_.getServers(), configDB_.getRootConfig()};
 			Client client(db, host_port, parser, server_fd_to_index[server_fd], reqStatus);
 			
-			client.setupResponse();
-			// if client requested CGI
-			if (client.getResponseRef().getStatus() <= 400 && (client.getCgi() || client.getCgiResponse()))
-			{
+			client.setupResponse(); // !!! WAS HANGING HERE 
+			// if client requested CGI - we do see here it - 
+			// http response stops working 
+
+			// 415 (not allowed) for example -> 200 will pretend
+			if (client.getResponseRef().getStatus() <= 400 && (client.getCgi() || client.getCgiResponse())) // getCgi - not working /// check: cgi_true_
+			// cgi_true_ is from int HttpResponse::handleMethods() ===============================
+			// isCgi, flag and status_code_
+			{ 
 				// create new CgiClient (copy) & add it to epoll structure (FD which ubderstands events)
-				_cgi_clients[new_socket] = NULL;
 				
 				// COPY CONSTRUCTOR FOR CGI CLIENT -> FD : CgiClient
 				// !!!
+				_cgi_clients[new_socket] = NULL;
 				_cgi_clients[new_socket] = new CgiClient(client, this->_epoll_fds);			
 					
 				// saving it into fd of child process
 				// was problem with YES CAT (bc of while loop - while had to go 1 level higher)
 				// cgi handling happens 1 time -> creating client obj 1 time
 				_cgi_clients_childfd[_cgi_clients[new_socket]->getPipeOut()] =  new_socket;
+				//int CgiHandle::getPipeOut(){
+				//	return this->pipe_out[0];}
+				
+				// if child fd : client fd (checking events under child fd)
 				return (1);
 			}
 			response = client.getResponseString();
@@ -567,6 +579,7 @@ size_t Servers::handleResponse(int reqStatus, int server_fd, int new_socket, Htt
 		}
 		return 1;
 }
+
 
 int Servers::setNonBlocking(int fd){
 	int flags = fcntl(fd, F_GETFL);
@@ -592,6 +605,7 @@ int Servers::setNonBlocking(int fd){
 int Servers::handleIncomingCgi(int child_fd){
 	std::string response;
 	int	client_fd;	
+	// searching for clientfd
 	for (std::map<int, int>::iterator it = _cgi_clients_childfd.begin(); it != _cgi_clients_childfd.end(); it++)
 	{
 		if (it->first == child_fd)
@@ -600,8 +614,8 @@ int Servers::handleIncomingCgi(int child_fd){
 			break;
 		}
 	}
-	if (_cgi_clients[client_fd] == NULL)
-	{
+	if (_cgi_clients[client_fd] == NULL) // to secure - didnt manage to proof it
+	{ // if that obj doesnt exit
 		removeFromEpoll(child_fd);
 		deleteClient(client_fd);
 		for (std::map<int, int>::iterator it = _cgi_clients_childfd.begin(); it != _cgi_clients_childfd.end();)
@@ -610,6 +624,7 @@ int Servers::handleIncomingCgi(int child_fd){
 			{
 				removeFromEpoll(it->first);	
 				std::map<int, int>::iterator eraseIt = it;
+				// no clients should be attached
 				// _cgi_clients_childfd.erase(it->first);
 				it++;
 				_cgi_clients_childfd.erase(eraseIt);
@@ -619,9 +634,9 @@ int Servers::handleIncomingCgi(int child_fd){
 		}
 		return 0;
 	}
-	_cgi_clients[client_fd]->HandleCgi(); // !!! MAIN STUFF
+	_cgi_clients[client_fd]->HandleCgi(); // !!! MAIN STUFF FromCgi
 	if (_cgi_clients[client_fd]->getStatusCode() == 200 || _cgi_clients[client_fd]->getStatusCode() == 500)
-	{
+	{ // request / response are created 1 time onlz ================================== !!!
 		_cgi_clients[client_fd]->getResponse().createResponse(); // after all data is read -> create response
 		response = _cgi_clients[client_fd]->getResponseString();
 		ssize_t bytes = write(client_fd, response.c_str(), response.size());
@@ -640,6 +655,7 @@ void Servers::setTimeout(int client_fd){
 	_client_time[client_fd] = time(NULL);
 }
 
+//=====================================
 void Servers::checkClientTimeout(){
 	time_t current_time = time(NULL);
 	for (std::map<int, time_t>::iterator it = _client_time.begin(); it != _client_time.end(); it++)
@@ -666,6 +682,7 @@ void Servers::checkClientTimeout(){
 		}
 	}
 }
+//=====================================
 
 // remove client from waiting list -> remove cgi elements
 // FD removes from epoll

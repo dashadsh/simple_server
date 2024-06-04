@@ -208,6 +208,7 @@ void HttpResponse::build()
 	}
 }
 
+// ==================================================================
 int HttpResponse::handleMethods()
 {
 	std::string &method = config_.getMethod();
@@ -238,6 +239,7 @@ int HttpResponse::handleMethods()
 
 	return (this->*(HttpResponse::methods_[method]))();
 }
+// ==================================================================
 
 int HttpResponse::handleDirectoryRequest()
 {
@@ -471,13 +473,13 @@ int HttpResponse::sendResponse(int fd)
 
 	return 1;
 }
-
+//==================
 bool HttpResponse::isCgi(std::string ext)
 {
 	VecStr &cgi = config_.getCgi();
 	return std::find(cgi.begin(), cgi.end(), ext) != cgi.end();
 }
-
+//============
 void HttpResponse::setStatusCode(int code)
 {
 	status_code_ = code;

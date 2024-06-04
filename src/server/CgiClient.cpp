@@ -37,9 +37,11 @@ CgiClient::~CgiClient()
     delete cgi_;
 }
 
+// HTTP response
 void CgiClient::HandleCgi()
 {
-	fromCgi(*cgi_);
+	// while statuscode != 200 !=500
+	fromCgi(*cgi_); // was infinite loop --- cmd execuded, but parent here
     if (status_code_ == 0)
         return ;
 	else if (cgi_->getExitStatus() == 500)
@@ -70,10 +72,11 @@ void CgiClient::toCgi(CgiHandle &cgi, std::string &req_body)
 	}
 }
 
+// nonblocking - retun -1, otherwise will hang
 void CgiClient::fromCgi(CgiHandle &cgi)
 {
 	int bytesRead;
-	char buffer[4096];
+	char buffer[4096]; // extra waitinf for 1 sek
 	// fd_set readfds;
 	// FD_ZERO(&readfds);
 	// FD_SET(cgi.getPipeOut(), &readfds);
@@ -85,16 +88,18 @@ void CgiClient::fromCgi(CgiHandle &cgi)
 	// if (select_value > 0)
 	// 	{
 		if ((bytesRead = read(cgi.getPipeOut(), buffer, sizeof(buffer))) > 0)
-		{
+		{ // nonblkocking will return -1 if nothing to read
+		// tomeout will also call thisfunction
 			body_->append(buffer, bytesRead);
 			cgi_bytes_read_ += bytesRead;
 			if ((body_->find("\r\n\r\n") != std::string::npos || body_->find("\r\n") != std::string::npos) && !cgiHeadersParsed_)
 				handleCgiHeaders(*body_);
 			cgiRead_ = true;
 		}
-		else if (bytesRead == -1 || bytesRead == 0)
+		else if (bytesRead == -1 || bytesRead == 0) // -1 didnt manage yet , 0 nothing to read
 		{
-			status_code_ = (cgiRead_) ? 200 : 500;
+			status_code_ = (cgiRead_) ? 200 : 500; // read => 200 
+			// we will land here if we will use Timeout
 		}
 	// }
 	// else if (select_value == -1)
@@ -137,7 +142,7 @@ void CgiClient::parseCgiHeaders()
 void CgiClient::handleCgiHeaders(std::string &body_)
 {
 	std::string::size_type pos = std::string::npos;
-	
+
 	if (body_.find("\r\n\r\n") != std::string::npos)
 		pos = body_.find("\r\n\r\n");
 	else if (body_.find("\r\n") != std::string::npos)
@@ -216,3 +221,5 @@ void CgiClient::deleteChild(int child_fd)
 		std::cerr << "Failed to remove client file descriptor from epoll instance." << std::endl;
 	}
 }
+
+// request and response are called 1 time 

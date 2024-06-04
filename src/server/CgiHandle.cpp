@@ -218,7 +218,7 @@ std::string CgiHandle::checkShebang(){
 	std::getline(file, line);
 	if (line.find("#!") == std::string::npos)
 		return "";
-	else{
+	else {
 		std::stringstream ss(line);
 		return(line.substr(line.find("#!") + 2));
 	}
