@@ -1,3 +1,15 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   Client.hpp                                         :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: doduwole <doduwole@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2024/06/01 10:41:26 by doduwole          #+#    #+#             */
+/*   Updated: 2024/06/01 14:04:07 by doduwole         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 
 #ifndef CLIENT_HPP
 #define CLIENT_HPP
@@ -39,7 +51,6 @@ public:
     RequestConfig &getConfigRef();
     HttpResponse &getResponseRef();
     HttpRequest &getRequestRef();
-    Client* clone() const;
     void setConfig(RequestConfig &config);
     void setResponse(HttpResponse &response);
     bool getCgiResponse();

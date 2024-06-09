@@ -1,3 +1,14 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   RequestConfig.hpp                                  :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: doduwole <doduwole@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2024/06/01 10:43:16 by doduwole          #+#    #+#             */
+/*   Updated: 2024/06/01 14:07:08 by doduwole         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
 
 #ifndef REQUESTCONFIG_HPP
 #define REQUESTCONFIG_HPP
@@ -98,12 +109,9 @@ public:
   void setLociMatched(int val);
   int getLociMatched();
   void setTargetSensitivity();
-  // --------------------------------------------------------
   bool isCgi(std::string path);
   void setCgi(bool& val);
   bool get_Cgi();
-  // --------------------------------------------------------
-  void setSubstr(int start);
   std::string &getBody();
 
   void setMap(const VecStr &vec, std::map<int, std::string> &resultMap, std::string &codes);
@@ -132,7 +140,7 @@ private:
   size_t serverId;
   std::string auth_;
   std::string upload_;
-  std::vector<std::string> cgi_; // -------------------------------------------------------
+  std::vector<std::string> cgi_;
   std::map<std::string, int> locationsMap_;
   int isLociMatched_;
   std::string uri_suffix_;

@@ -1,3 +1,14 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   CgiClient.hpp                                      :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: doduwole <doduwole@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2024/06/01 10:41:03 by doduwole          #+#    #+#             */
+/*   Updated: 2024/06/01 14:03:56 by doduwole         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
 
 #ifndef CGI_CLIENT_CPP
 # define CGI_CLIENT_CPP
@@ -28,6 +39,7 @@ private:
     std::string     *req_body_;
     std::string     *body_;
 	int				epoll_fd_;
+
 public:
 	CgiClient(Client client, int epoll_fd);
 	~CgiClient();

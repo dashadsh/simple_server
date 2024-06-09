@@ -1,3 +1,15 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   File.hpp                                           :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: doduwole <doduwole@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2024/06/01 10:42:09 by doduwole          #+#    #+#             */
+/*   Updated: 2024/06/05 12:18:03 by doduwole         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 
 #ifndef FILE_HPP
 #  define FILE_HPP
@@ -16,8 +28,6 @@ struct directory_listing
 
     directory_listing() : is_dir_(false){};
 };
-
-bool sort_auto_listing(directory_listing i, directory_listing j);
 
 
 class File
@@ -40,9 +50,10 @@ public:
     void parseExt();
     void parseExtNegotiation();
     void closeFile();
-    void createFile(const std::string &body);
-    void appendFile(const std::string &body);
-    void appendFile(const std::string &body, std::string MimeTypes);
+    bool createFile(const std::string &body);
+    int appendFile(const std::string &body);
+    int appendFile(const std::string &body, std::string filename);
+    bool updateFile(const std::string &content);
     bool deleteFile();
     void set_path(std::string path, bool negotiation = false);
     void findMatchingFiles();

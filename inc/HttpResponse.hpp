@@ -1,3 +1,14 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   HttpResponse.hpp                                   :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: doduwole <doduwole@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2024/06/01 10:42:26 by doduwole          #+#    #+#             */
+/*   Updated: 2024/06/01 14:06:58 by doduwole         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
 
 #ifndef HTTP_RESPONSE_HPP
 #define HTTP_RESPONSE_HPP
@@ -51,19 +62,13 @@ public:
 	std::string accept_charset(std::vector<std::string> &matches);
 	bool getRedirect();
 	std::string redirect_target();
-	void printMethodMap();
 	void setErrorPageHeaders(int status_code);
 	int checkCustomErrorPage(int status_code);
-
-	std::pair<std::string, double> extractLangAndQ(const std::string& langAndQ);
-	std::string findBestLanguage(const std::vector<std::string>& matches, const std::vector<std::pair<std::string, double> >& langQPairs);
 
 	CharsetAndQ extractCharsetAndQ(const std::string& charsetAndQ);
 	std::string handleDefaultCharset(const std::string& bestCharset);
 	std::string findBestCharset(const std::vector<CharsetAndQ>& charsetAndQValues, const std::vector<std::string>& matches);
 	void buildDebugger (std::string method);
-
-	std::string response_log(LogLevel level);
 
 	int GET();
 	int POST();
@@ -74,7 +79,6 @@ public:
 	std::string getResponseBody();
 	int sendResponse(int fd);
 	std::string getSampleResponse();
-	// --------------------------------------------------------
 	bool isCgi(std::string extension);
 
 	void HandleCgi();
@@ -84,16 +88,12 @@ public:
 	void handleCgiHeaders(std::string &body);
 	void parseCgiHeaders();
 	void closeParentCgiPipe(CgiHandle &cgi);
-	// --------------------------------------------------------
 	void setStatusCode(int code);
 	void setHeader(std::string key, std::string value);
-	void appendBody(char *buffer, int size);
 	std::string& getBody();
 	void setBody(std::string body);
 	File *getFile();
 	std::map<std::string, std::string> getHeaders();
-	void setSubstr(int start, std::size_t end);
-	void setSubstr(int start);
 	void clearBody();
 	void setConfig(RequestConfig &config);
 	std::map<std::string, std::string> &getHeadersRef();
